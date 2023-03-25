@@ -1,6 +1,6 @@
 ---
 title: "R Charts and Maps Assignment"
-author: "YOUR NAME HERE"
+author: "Riya Sharma"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 format:
   html:
