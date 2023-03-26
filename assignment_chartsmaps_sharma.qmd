@@ -25,6 +25,7 @@ library(htmltools)
 library(janitor)
 library(rmapshaper)
 library(here)
+library(ggthemes)
 options(tigris_class = "sf")
 
 ```
@@ -71,9 +72,17 @@ For the Senate race, create a column/bar chart that shows how many counties the 
 
 ```{r}
 
+senate_results = senate_results %>%
+  mutate(
+    is_r_above_trump_new = ifelse(is_r_above_trump=="Y", "Better", "Worse")
+  )
 
-
-
+ggplot(senate_results, aes(x = is_r_above_trump_new)) + 
+  geom_bar(fill = "#9ebcda") +
+  xlab("Performance") +
+  ylab("Number of counties") +
+  labs(title = "Republican senate candidate performance compared to Trump in GA counties") +
+  theme_clean()
 
 ```
 
@@ -83,6 +92,17 @@ Now do the same as Question 1, just this time do it for the race for Governor.
 
 ```{r}
 
+governor_results = governor_results %>%
+  mutate(
+    is_r_above_trump_new = ifelse(is_r_above_trump=="Y", "Better", "Worse")
+  )
+
+ggplot(governor_results, aes(x = is_r_above_trump_new)) + 
+  geom_bar(fill = "#9ebcda") +
+  xlab("Performance") +
+  ylab("Number of counties") +
+  labs(title = "Republican governor candidate performance compared to Trump in GA counties") +
+  theme_clean()
 
 
 
@@ -97,8 +117,21 @@ Your chart should be sorted from the biggest drop to the smallest among the top 
 
 ```{r}
 
+senate_drops = senate_results %>%
+  group_by(county) %>%
+  summarize(pct_r_above_trump = pct_r_above_trump) %>%
+  arrange(pct_r_above_trump) %>%
+  head(10)
 
-
+senate_drops %>%
+  arrange(pct_r_above_trump) %>%
+  ggplot(aes(x = reorder(county, desc(pct_r_above_trump)), y = pct_r_above_trump)) + 
+  geom_col(fill = "#9ebcda") +
+  coord_flip() + 
+  xlab("Counties") +
+  ylab("Percentage") +
+  labs(title = "Highest drops between Republican candidates and Trump in GA counties (Top 10)") +
+  theme_clean()
 
 
 ```
@@ -109,8 +142,27 @@ For the Senate race, create a chart that shows the top 10 counties highest margi
 
 ```{r}
 
+senate_results = senate_results %>%
+  mutate(
+    d_margin = pct_d_2022 - pct_r_2022
+  )
 
+dem_margin_s = senate_results %>%
+  group_by(county) %>%
+  summarize(d_margin = d_margin) %>%
+  arrange(desc(d_margin)) %>%
+  head(10)
 
+dem_margin_s %>%
+  arrange(desc(d_margin)) %>%
+  ggplot(aes(x = reorder(county, d_margin), y = d_margin)) + 
+  geom_col(fill = "#9ebcda") +
+  coord_flip() + 
+  xlab("Counties") +
+  ylab("Democratic margin of victory percentage") +
+  labs(title = "Highest Democratic margins of victory for senate race in GA counties (Top 10)",
+       subtitle = "2022") +
+  theme_clean()
 
 
 ```
@@ -121,7 +173,27 @@ Now do the same as Question 4, only this time for the race for Governor instead.
 
 ```{r}
 
+governor_results = governor_results %>%
+  mutate(
+    d_margin = pct_d_2022 - pct_r_2022
+  )
 
+dem_margin_g = governor_results %>%
+  group_by(county) %>%
+  summarize(d_margin = d_margin) %>%
+  arrange(desc(d_margin)) %>%
+  head(10)
+
+dem_margin_g %>%
+  arrange(desc(d_margin)) %>%
+  ggplot(aes(x = reorder(county, d_margin), y = d_margin)) + 
+  geom_col(fill = "#9ebcda") +
+  coord_flip() + 
+  xlab("Counties") +
+  ylab("Democratic margin of victory percentage") +
+  labs(title = "Highest Democratic margins of victory for governor race in GA counties (Top 10)",
+       subtitle = "2022") +
+  theme_clean()
 
 
 
@@ -134,9 +206,28 @@ Now do the same as Question 4, only this time for the race for Governor instead.
 (Note that to accomplish this you'll have to first run a join that merges the two datasets, so that you have both the senate and governor version of the `pct_r_2022` column in the same table.)
 
 ```{r}
+# .x are senate results; .y are governor results
+sen_gov_results = inner_join(senate_results, governor_results, by=c("county"="county"))
 
+sen_gov_results = sen_gov_results %>% 
+  mutate(pct_r_diff = pct_r_2022.y - pct_r_2022.x)
 
+r_diff = sen_gov_results %>%
+  group_by(county) %>%
+  summarize(pct_r_diff = pct_r_diff) %>%
+  arrange(desc(pct_r_diff)) %>%
+  head(10)
 
+r_diff %>%
+  arrange(desc(pct_r_diff)) %>%
+  ggplot(aes(x = reorder(county, pct_r_diff), y = pct_r_diff)) + 
+  geom_col(fill = "#9ebcda") +
+  coord_flip() + 
+  xlab("Counties") +
+  ylab("Percent difference") +
+  labs(title = "Pct differences between Republican senate and governor candidates in GA counties (Top 10)",
+       subtitle = "2022") +
+  theme_clean()
 
 
 ```
@@ -169,8 +260,17 @@ For the Senate race, create a choropleth (shaded) map of Georgia counties that s
 
 ```{r}
 
+new_senate_sf = counties_geo %>%
+  left_join(. , senate_results, by=c("NAME"="county"))
 
-
+tm_shape(new_senate_sf) + 
+  tm_fill(col="pct_r_above_trump", title = "Percent difference from Trump") + 
+  tm_layout(main.title = "Republican senate candidate performance compared to Trump in GA counties",
+            main.title.size = 0.7,
+            legend.outside = TRUE,
+            legend.outside.size = 0.5,
+            legend.text.size = 1) + 
+  tm_polygons()
 
 
 ```
@@ -181,6 +281,17 @@ Now do the same as Question 7, just this time do it for the race for Governor.
 
 ```{r}
 
+new_governor_sf = counties_geo %>%
+  left_join(. , governor_results, by=c("NAME"="county"))
+
+tm_shape(new_governor_sf) + 
+  tm_fill(col="pct_r_above_trump", title = "Percent difference from Trump") + 
+  tm_layout(main.title = "Republican governor candidate performance compared to Trump in GA counties",
+            main.title.size = 0.7,
+            legend.outside = TRUE,
+            legend.outside.size = 0.5,
+            legend.text.size = 1) + 
+  tm_polygons()
 
 
 
@@ -193,7 +304,14 @@ For the Senate race, create a choropleth map that shows the margins of victory f
 
 ```{r}
 
-
+tm_shape(new_senate_sf) + 
+  tm_fill(col="d_margin", title = "Democratic margin of victory percentages") + 
+  tm_layout(main.title = "Senate margins of victory for Democratic candidates in GA counties",
+            main.title.size = 0.7,
+            legend.outside = TRUE,
+            legend.outside.size = 0.4,
+            legend.text.size = 1) + 
+  tm_polygons()
 
 
 
@@ -205,7 +323,14 @@ Now do the same as Question 4, only this time for the race for Governor instead.
 
 ```{r}
 
-
+tm_shape(new_governor_sf) + 
+  tm_fill(col="d_margin", title = "Democratic margin of victory percentages") + 
+  tm_layout(main.title = "Governor margins of victory for Democratic candidates in GA counties",
+            main.title.size = 0.7,
+            legend.outside = TRUE,
+            legend.outside.size = 0.5,
+            legend.text.size = 1) + 
+  tm_polygons()
 
 
 
@@ -219,8 +344,17 @@ Now do the same as Question 4, only this time for the race for Governor instead.
 
 ```{r}
 
+sen_gov_sf = counties_geo %>%
+  left_join(. , sen_gov_results, by=c("NAME"="county"))
 
-
+tm_shape(sen_gov_sf) + 
+  tm_fill(col="pct_r_diff", title = "Percent differences") + 
+  tm_layout(main.title = "Pct differences between Republican senate and governor candidates in GA counties",
+            main.title.size = 0.7,
+            legend.outside = TRUE,
+            legend.outside.size = 0.5,
+            legend.text.size = 1) + 
+  tm_polygons()
 
 
 ```
